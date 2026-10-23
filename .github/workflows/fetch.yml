@@ -1,0 +1,51 @@
+name: fetch
+on:
+  schedule:
+    - cron: '17 9 * * *'
+  workflow_dispatch:
+    inputs:
+      since:
+        description: 'Filed on or after (YYYY-MM-DD); empty = 30 days ago'
+        required: false
+        default: ''
+      until:
+        description: 'Filed on or before (YYYY-MM-DD); empty = no end'
+        required: false
+        default: ''
+      images:
+        description: 'Download page images of paper filings (true/false)'
+        required: false
+        default: 'true'
+concurrency:
+  group: fetch-${{ github.event.inputs.since || 'daily' }}
+  cancel-in-progress: false
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install curl_cffi
+      - name: Fetch public PTR filings
+        env:
+          SINCE: ${{ github.event.inputs.since }}
+          UNTIL: ${{ github.event.inputs.until }}
+          IMAGES: ${{ github.event.inputs.images }}
+        run: |
+          [ -n "$SINCE" ] || SINCE=$(date -u -d '30 days ago' +%F)
+          ARGS="--since $SINCE --out out --delay 1.0"
+          [ -n "$UNTIL" ] && ARGS="$ARGS --until $UNTIL"
+          [ "$IMAGES" = "false" ] && ARGS="$ARGS --no-images"
+          echo "args: $ARGS"
+          python fetch.py $ARGS
+      - name: Upload raw JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: efd-ptr-${{ github.run_id }}
+          path: out
+          retention-days: 7
+          if-no-files-found: ignore
