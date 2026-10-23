@@ -1,0 +1,14 @@
+name: probe
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: pip install curl_cffi
+      - run: |
+          python - <<'P'
+          from curl_cffi import requests
+          s=requests.Session(impersonate="chrome120")
+          r=s.get("https://efdsearch.senate.gov/search/home/",timeout=30)
+          print("STATUS",r.status_code,"csrf" , "csrfmiddlewaretoken" in r.text)
+          P
