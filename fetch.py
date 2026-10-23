@@ -52,6 +52,7 @@ class Fetcher:
                 if r.status_code == 200:
                     return r
                 last = f"HTTP {r.status_code}"
+                print(f"  {method} {url} -> {last}: {r.text[:160]!r}", flush=True)
                 if r.status_code in (403, 429, 503):           # back off hard when the site pushes back
                     time.sleep(min(300, 15 * 2 ** attempt))
                     if r.status_code == 403 and attempt >= 1:
@@ -67,8 +68,11 @@ class Fetcher:
         m = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', r.text)
         if r.status_code != 200 or not m:
             raise RuntimeError(f"home page blocked (HTTP {r.status_code})")
-        self.s.post(EFD + "/search/home/", data={"csrfmiddlewaretoken": m.group(1), "prohibition_agreement": "1"},
-                    headers={"Referer": EFD + "/search/home/"}, timeout=30)
+        p = self.s.post(EFD + "/search/home/", data={"csrfmiddlewaretoken": m.group(1), "prohibition_agreement": "1"},
+                        headers={"Referer": EFD + "/search/home/"}, timeout=30)
+        g = self.s.get(EFD + "/search/", headers={"Referer": EFD + "/search/home/"}, timeout=30)
+        print(f"  session: home={r.status_code} agree={p.status_code} search={g.status_code} "
+              f"cookies={sorted(self.s.cookies.keys())}", flush=True)
 
 
 def list_ptrs(f: Fetcher, since: date, until: date | None) -> list[dict]:
