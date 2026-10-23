@@ -53,10 +53,13 @@ class Fetcher:
                     return r
                 last = f"HTTP {r.status_code}"
                 print(f"  {method} {url} -> {last}: {r.text[:160]!r}", flush=True)
+                if r.status_code == 403 and "Access Denied" in r.text:
+                    if attempt >= 1:                            # edge firewall refuses this runner: stop, do not hammer
+                        raise RuntimeError(f"{method} {url}: {last} (Access Denied)")
+                    time.sleep(30)
+                    continue
                 if r.status_code in (403, 429, 503):           # back off hard when the site pushes back
                     time.sleep(min(300, 15 * 2 ** attempt))
-                    if r.status_code == 403 and attempt >= 1:
-                        self.agree()
                     continue
             except Exception as exc:  # noqa: BLE001
                 last = repr(exc)[:200]
@@ -73,6 +76,8 @@ class Fetcher:
         g = self.s.get(EFD + "/search/", headers={"Referer": EFD + "/search/home/"}, timeout=30)
         print(f"  session: home={r.status_code} agree={p.status_code} search={g.status_code} "
               f"cookies={sorted(self.s.cookies.keys())}", flush=True)
+        if p.status_code != 200:
+            raise RuntimeError(f"agreement POST refused (HTTP {p.status_code}) - edge firewall blocks this runner")
 
 
 def list_ptrs(f: Fetcher, since: date, until: date | None) -> list[dict]:
